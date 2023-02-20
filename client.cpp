@@ -9,6 +9,7 @@
 #include <string>
 #include <set>
 #include <cstdlib>
+#include <stdexcept>
 
 // C Standard Library and System libraries
 #include <stdio.h>
@@ -31,7 +32,35 @@ const int32_t UNKNOWN_ARGUMENT = 1;
 const int32_t STD_EXCEPTION_THROWN = 2;
 const int32_t UNKNOWN_EXCEPTION_THROWN = 3;
 
+/* EstablishConnection
+ * Responsible for opening a socket to the server.
+ * Parameters:
+ *   std::string serverAddress -- Address/IP of the server to connect to
+ *   int16_t     port          -- Port to connect to
+ *   bool        debug         -- Enable debug messages
+ * Returns:
+ *   An integer for the opened socket file descriptor.
+ * Exceptions:
+ *   Will throw an exception if there is an issue resolving the server name (i.e., the server address or port are invalid)
+ *   or if the socket could not be opened.
+ */
+int EstablishConnection(std::string serverAddress, int16_t port, bool debug)
+{
+    // Set up the hints
+    addrinfo hints;
+    memset(&hints, 0, sizeof(hints)); // Do I need to do this since this is C++?
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
 
+    // Request the address info
+    addrinfo* serverInfo;
+    int rv = getaddrinfo(serverAddress.c_str(), std::to_string(port).c_str(), &hints, &serverInfo);
+    if (rv != 0)
+    {
+        std::runtime_error ex(gai_strerror(rv));
+        throw ex;
+    }
+}
 
 int main(int argc, char* argv[])
 {
