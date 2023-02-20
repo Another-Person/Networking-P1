@@ -29,8 +29,9 @@
 
 // Constants for errors
 const int32_t UNKNOWN_ARGUMENT = 1;
-const int32_t STD_EXCEPTION_THROWN = 2;
+const int32_t STD_EXCEPTION_THROWN = 2;     // Probably rename this one and the one below?
 const int32_t UNKNOWN_EXCEPTION_THROWN = 3;
+const int32_t NETWORKING_ERROR = 4;
 
 /* EstablishConnection
  * Responsible for opening a socket to the server.
@@ -44,7 +45,7 @@ const int32_t UNKNOWN_EXCEPTION_THROWN = 3;
  *   Will throw an exception if there is an issue resolving the server name (i.e., the server address or port are invalid)
  *   or if the socket could not be opened and connected to.
  */
-int EstablishConnection(std::string serverAddress, int16_t port, bool debug)
+int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
 {
     // Set up the hints
     addrinfo hints;
@@ -90,7 +91,7 @@ int EstablishConnection(std::string serverAddress, int16_t port, bool debug)
     freeaddrinfo(serverInfo);
 
     // Check to see if our socket is actually open
-    if (socketFD == NULL)
+    if (socketFD == 0)
     {
         std::runtime_error ex("Unable to open socket");
         throw ex;
@@ -107,7 +108,7 @@ int main(int argc, char* argv[])
 {
     int retval = 0;
     int udpSocket = -1;
-    int serverPort = PORT_NUMBER;
+    uint16_t serverPort = PORT_NUMBER;
     std::string serverName = SERVER_IP;
     int32_t datagramsToSend = NUMBER_OF_DATAGRAMS;
     int32_t sendDelay = 0;
@@ -174,6 +175,24 @@ int main(int argc, char* argv[])
                   << "Number of datagrams: " << datagramsToSend << "\n"
                   << "Delay between datagrams: " << sendDelay << "\n";
     }
+
+    // How to best gatekeep this to keep it from running if above has issues?
+    // Do I even want that?
+    try
+    {
+        udpSocket = EstablishConnection(serverName, serverPort, debug);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        retval = NETWORKING_ERROR;
+    }
+    catch(...)
+    {
+        std::cerr << "Unknown exception caught\n";
+        retval = UNKNOWN_EXCEPTION_THROWN;
+    }
+
 
     if (udpSocket >= 0)
     {
