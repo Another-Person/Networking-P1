@@ -42,7 +42,7 @@ const int32_t UNKNOWN_EXCEPTION_THROWN = 3;
  *   An integer for the opened socket file descriptor.
  * Exceptions:
  *   Will throw an exception if there is an issue resolving the server name (i.e., the server address or port are invalid)
- *   or if the socket could not be opened.
+ *   or if the socket could not be opened and connected to.
  */
 int EstablishConnection(std::string serverAddress, int16_t port, bool debug)
 {
@@ -57,9 +57,50 @@ int EstablishConnection(std::string serverAddress, int16_t port, bool debug)
     int rv = getaddrinfo(serverAddress.c_str(), std::to_string(port).c_str(), &hints, &serverInfo);
     if (rv != 0)
     {
+        freeaddrinfo(serverInfo);
         std::runtime_error ex(gai_strerror(rv));
         throw ex;
     }
+
+    // Loop through the returned addresses and validate them by trying to connect to them
+    int socketFD = -1;
+    for (addrinfo* currentAddress = serverInfo; currentAddress != nullptr; currentAddress = currentAddress->ai_next)
+    {
+        // Attempt to create socket
+        if ((socketFD = socket(currentAddress->ai_family, currentAddress->ai_socktype, currentAddress->ai_protocol)) == -1)
+        {
+            perror("Error creating socket");
+            continue;
+        }
+
+        // Attempt to connect to to the socket
+        if (connect(socketFD, currentAddress->ai_addr, currentAddress->ai_addrlen) == -1)
+        {
+            perror("Error connecting");
+            continue;
+        }
+
+        // Getting this far means that we must have connected, so no need to keep iterating
+        break;
+    }
+
+    /* Since we either connected to an address or failed on all of them, we don't need the
+     * linked list anymore. As such, we free it up here.
+     */
+    freeaddrinfo(serverInfo);
+
+    // Check to see if our socket is actually open
+    if (socketFD == NULL)
+    {
+        std::runtime_error ex("Unable to open socket");
+        throw ex;
+    }
+
+    // Since the socket is open, set it to be nonblocking
+    fcntl(socketFD, F_SETFL, O_NONBLOCK);
+
+    // At long last, a prepared socket, ready to be returned:
+    return socketFD;
 }
 
 int main(int argc, char* argv[])
