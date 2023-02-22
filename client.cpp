@@ -10,6 +10,8 @@
 #include <set>
 #include <cstdlib>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
 
 // C Standard Library and System libraries
 #include <stdio.h>
@@ -26,6 +28,9 @@
 // Local includes
 #include "defaults.hpp"
 #include "structure.hpp"
+
+// Convinience type aliases & using statements
+using US = std::chrono::microseconds;
 
 // Constants for errors
 const int32_t UNKNOWN_ARGUMENT = 1;
@@ -163,14 +168,109 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
     return socketFD;
 }
 
+/* SendAndRecieve
+ * Main loop for sending and recieving packets. Keeps track of sequence numbers sent and recieved and displays
+ * the final results. Will inform the users of any errors that occur, such as incorrect # of bytes sent or unknown
+ * sequence numbers recieved.
+ * Parameters:
+ *   int socketFD              -- File descriptor for socket as prepared by EstablishConnection
+ *   uint32_t datagramsToSend   -- Number of packets to send
+ *   US delay                  -- Time in us to wait between sending packets
+ *   bool debug                -- Enable debug messages
+ * Returns:
+ *   Nothing.
+ * Exceptions:
+ *   Exceptions thrown from standard library objects may be thrown here.
+ */
+void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug)
+{
+    const std::string PAYLOAD = "jsachtleben";
+    std::set<uint32_t> sentIDs;
+
+    if (debug)
+    {
+        std::cout << "Entering SendAndRecieve...\n\n";
+    }
+
+
+    for (uint32_t i = 0; i < datagramsToSend; i++)
+    {
+        // Sending data
+        ClientDatagram prepDG = {i, static_cast<uint16_t>(PAYLOAD.size())}; // prepDG holds the info but not the payload
+        ssize_t datagramSize = sizeof(ClientDatagram) + prepDG.payload_length + 1; // add one to account for null byte
+        ClientDatagram* realDG = static_cast<ClientDatagram*>(malloc(datagramSize));
+        realDG->sequence_number = htonl(prepDG.sequence_number);
+        realDG->sequence_number = htons(prepDG.payload_length);
+        /* The next statement is... complicated.
+         * The pointer arithmetic takes the pointer to realDG and moves it to point to the byte past the "end" of the
+         * datagram struct. This is the designated space for the payload.
+         * We then copy the C string representation of the payload into this space. The size of the payload is used to
+         * make certain we only write the intended number of bytes.
+         */
+        strncpy((reinterpret_cast<char*>(realDG) + sizeof(ClientDatagram)),
+                PAYLOAD.c_str(), PAYLOAD.size());
+        // The realDG is now ready to be sent!
+        std::this_thread::sleep_for(delay);
+        ssize_t sentBytes = send(socketFD, static_cast<void*>(realDG), datagramSize, 0);
+        if (sentBytes == -1)
+        {
+            std::cerr << "Error sending on socket\n";
+            perror("send()");
+        }
+        else if (sentBytes != datagramSize)
+        {
+            std::cerr << "send() error: " << datagramSize << " bytes were requested to be sent, but " << sentBytes
+                      << " were actually sent!\n";
+        }
+        sentIDs.insert(prepDG.sequence_number);
+        free(realDG);
+
+        // Reciving data
+        ServerDatagram* serverDG = static_cast<ServerDatagram*>(malloc(sizeof(ServerDatagram)));
+        ssize_t recvBytes = recv(socketFD, static_cast<void*>(serverDG), sizeof(ServerDatagram), 0);
+        recvBytes = recv(socketFD, static_cast<void*>(serverDG), sizeof(ServerDatagram), 0);
+        if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
+        {
+            std::cerr << "Error reading from socket\n";
+            perror("recv()");
+        }
+        else if (recvBytes == 0)
+        {
+            std::cerr << "Socket closed unexpectedly\n";
+        }
+        // I suppose we're assuming that something was read here...
+        ServerDatagram data = {ntohl(serverDG->sequence_number), ntohs(serverDG->datagram_length)};
+        auto recvID = sentIDs.find(data.sequence_number); // sorry I can't be bothered to get the type right
+        if ( recvID == sentIDs.end())
+        {
+            std::cerr << "Recieved packet for unknown sequence ID " << serverDG->sequence_number << "!\n";
+        }
+        else
+        {
+            sentIDs.erase(recvID);
+        }
+        free(serverDG);
+    }
+
+    std::cout << datagramsToSend << " packets were sent, " << (datagramsToSend - sentIDs.size()) << " were recieved\n";
+
+
+    if (debug)
+    {
+        std::cout << "Finished network transmission!\n\n";
+    }
+
+
+}
+
 int main(int argc, char* argv[])
 {
     int retval = 0;
     int udpSocket = -1;
     uint16_t serverPort = PORT_NUMBER;
     std::string serverName = SERVER_IP;
-    int32_t datagramsToSend = NUMBER_OF_DATAGRAMS;
-    int32_t sendDelay = 0;
+    uint32_t datagramsToSend = NUMBER_OF_DATAGRAMS;
+    US sendDelay(0);
     bool debug = false;
 
     try
@@ -200,10 +300,10 @@ int main(int argc, char* argv[])
                 serverPort = std::stoi(optarg);
                 break;
             case 'n':
-                datagramsToSend = std::stoi(optarg);
+                datagramsToSend = std::stoul(optarg);
                 break;
             case 'y':
-                sendDelay = std::stoi(optarg);
+                sendDelay = US(std::stoi(optarg));
                 break;
             default:
                 std::cerr << "Unknown argument encountered.\n";
@@ -232,7 +332,7 @@ int main(int argc, char* argv[])
                   << "Server IP/address: " << serverName << "\n"
                   << "Server port: " << serverPort << "\n"
                   << "Number of datagrams: " << datagramsToSend << "\n"
-                  << "Delay between datagrams: " << sendDelay << "\n\n";
+                  << "Delay between datagrams: " << sendDelay.count() << "us\n\n";
     }
 
     // How to best gatekeep this to keep it from running if above has issues?
@@ -240,6 +340,7 @@ int main(int argc, char* argv[])
     try
     {
         udpSocket = EstablishConnection(serverName, serverPort, debug);
+        SendAndRecieve(udpSocket, datagramsToSend, sendDelay, debug);
     }
     catch(const std::exception& e)
     {
