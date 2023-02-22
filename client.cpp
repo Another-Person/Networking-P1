@@ -208,15 +208,7 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         if (debug)
         {
             std::cout << "Prep DG made, sequence # " << prepDG.sequence_number << " and payload size "
-                      << prepDG.payload_length << "\n"
-                      << "Raw bytes: ";
-            int8_t* bytes = reinterpret_cast<int8_t*>(&prepDG);
-            for (size_t counter = 0; counter < sizeof(ClientDatagram); counter++)
-            {
-                std::cout << std::hex << bytes[counter] << " ";
-            }
-            std::cout << "\n\n";
-
+                      << prepDG.payload_length << "\n";
         }
 
         ssize_t datagramSize = sizeof(ClientDatagram) + prepDG.payload_length + 1; // add one to account for null byte
@@ -235,14 +227,7 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
 
         if (debug)
         {
-                std::cout << "Real DG made and ready to be sent!\n"
-                          << "Raw bytes: ";
-                int8_t* bytes = reinterpret_cast<int8_t*>(realDG);
-                for (ssize_t counter = 0; counter < datagramSize; counter++)
-                {
-                    std::cout << std::hex << bytes[counter] << " ";
-                }
-                std::cout << "\n\n";
+                std::cout << "Real DG made and ready to be sent!\n";
         }
 
 
@@ -262,38 +247,50 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         if (debug)
         {
             std::cout << "Asked to send " << datagramSize << " bytes, sent " << sentBytes << " bytes\n"
-                      << "Inserting sequence number " << prepDG.sequence_number << "\n";
+                      << "Inserting sequence number " << prepDG.sequence_number << "\n\n";
         }
         sentIDs.insert(prepDG.sequence_number);
         free(realDG);
 
         // Reciving data
         ServerDatagram* serverDG = static_cast<ServerDatagram*>(malloc(sizeof(ServerDatagram)));
-        ssize_t recvBytes = recv(socketFD, static_cast<void*>(serverDG), sizeof(ServerDatagram), 0);
-        recvBytes = recv(socketFD, static_cast<void*>(serverDG), sizeof(ServerDatagram), 0);
-        if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
+        ssize_t recvBytes = 0;
+        for (size_t i = 0; i < 8; i++)
         {
-            std::cerr << "Error reading from socket\n";
-            perror("recv()");
+            recvBytes = recv(socketFD, static_cast<void *>(serverDG), sizeof(ServerDatagram), 0);
+            if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
+            {
+                std::cerr << "Error reading from socket\n";
+                perror("recv()");
+                continue;
+            }
+            else if (recvBytes == 0)
+            {
+                std::cerr << "Socket closed unexpectedly\n";
+                continue;
+            }
+            else if (recvBytes == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            {
+                continue;
+            }
+
+            // We must have recieved something, if we get here, so break
+            break;
         }
-        else if (recvBytes == 0)
+        if (recvBytes <= 0)
         {
-            std::cerr << "Socket closed unexpectedly\n";
+            free(serverDG);
+            continue;
         }
+
 
         if (debug)
         {
             std::cout << "Expected to recieve " << sizeof(ServerDatagram) << " bytes, recieved " << recvBytes
-                      << "bytes\n"
-                      << "Raw data recieved: ";
-            int8_t* bytes = reinterpret_cast<int8_t*>(serverDG);
-            for (ssize_t counter = 0; counter < recvBytes; counter++)
-            {
-                std::cout << std::hex << bytes[counter] << " ";
-            }
-            std::cout << "\n\n";
+                      << "bytes\n";
         }
-        // I suppose we're assuming that something was read here...
+
+        // I suppose we're assuming that something was read here... Not anymore?
         ServerDatagram data = {ntohl(serverDG->sequence_number), ntohs(serverDG->datagram_length)};
 
         if (debug)
@@ -321,7 +318,8 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         free(serverDG);
     }
 
-    std::cout << datagramsToSend << " packets were sent, " << (datagramsToSend - sentIDs.size()) << " were recieved\n";
+    std::cout << datagramsToSend << " messages sent.\n"
+              << "Unacknowledged packets: " << sentIDs.size() << "\n";
 
 
     if (debug)
