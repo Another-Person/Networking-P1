@@ -2,3 +2,7 @@
 perry-p1-x86-Windows.zip
 /build/
 /.vscode/
+*.d
+*.o
+client
+server
