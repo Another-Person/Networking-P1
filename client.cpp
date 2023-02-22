@@ -196,11 +196,33 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
     for (uint32_t i = 0; i < datagramsToSend; i++)
     {
         // Sending data
+
+        if (debug)
+        {
+            std::cout << "Preparing to send packet " << i << "\n";
+        }
+
+
         ClientDatagram prepDG = {i, static_cast<uint16_t>(PAYLOAD.size())}; // prepDG holds the info but not the payload
+
+        if (debug)
+        {
+            std::cout << "Prep DG made, sequence # " << prepDG.sequence_number << " and payload size "
+                      << prepDG.payload_length << "\n"
+                      << "Raw bytes: ";
+            int8_t* bytes = reinterpret_cast<int8_t*>(&prepDG);
+            for (size_t counter = 0; counter < sizeof(ClientDatagram); counter++)
+            {
+                std::cout << std::hex << bytes[counter] << " ";
+            }
+            std::cout << "\n\n";
+
+        }
+
         ssize_t datagramSize = sizeof(ClientDatagram) + prepDG.payload_length + 1; // add one to account for null byte
         ClientDatagram* realDG = static_cast<ClientDatagram*>(malloc(datagramSize));
         realDG->sequence_number = htonl(prepDG.sequence_number);
-        realDG->sequence_number = htons(prepDG.payload_length);
+        realDG->payload_length = htons(prepDG.payload_length);
         /* The next statement is... complicated.
          * The pointer arithmetic takes the pointer to realDG and moves it to point to the byte past the "end" of the
          * datagram struct. This is the designated space for the payload.
@@ -208,8 +230,22 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
          * make certain we only write the intended number of bytes.
          */
         strncpy((reinterpret_cast<char*>(realDG) + sizeof(ClientDatagram)),
-                PAYLOAD.c_str(), PAYLOAD.size());
+                PAYLOAD.c_str(), PAYLOAD.size() + 1);
         // The realDG is now ready to be sent!
+
+        if (debug)
+        {
+                std::cout << "Real DG made and ready to be sent!\n"
+                          << "Raw bytes: ";
+                int8_t* bytes = reinterpret_cast<int8_t*>(realDG);
+                for (ssize_t counter = 0; counter < datagramSize; counter++)
+                {
+                    std::cout << std::hex << bytes[counter] << " ";
+                }
+                std::cout << "\n\n";
+        }
+
+
         std::this_thread::sleep_for(delay);
         ssize_t sentBytes = send(socketFD, static_cast<void*>(realDG), datagramSize, 0);
         if (sentBytes == -1)
@@ -221,6 +257,12 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         {
             std::cerr << "send() error: " << datagramSize << " bytes were requested to be sent, but " << sentBytes
                       << " were actually sent!\n";
+        }
+
+        if (debug)
+        {
+            std::cout << "Asked to send " << datagramSize << " bytes, sent " << sentBytes << " bytes\n"
+                      << "Inserting sequence number " << prepDG.sequence_number << "\n";
         }
         sentIDs.insert(prepDG.sequence_number);
         free(realDG);
@@ -238,8 +280,30 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         {
             std::cerr << "Socket closed unexpectedly\n";
         }
+
+        if (debug)
+        {
+            std::cout << "Expected to recieve " << sizeof(ServerDatagram) << " bytes, recieved " << recvBytes
+                      << "bytes\n"
+                      << "Raw data recieved: ";
+            int8_t* bytes = reinterpret_cast<int8_t*>(serverDG);
+            for (ssize_t counter = 0; counter < recvBytes; counter++)
+            {
+                std::cout << std::hex << bytes[counter] << " ";
+            }
+            std::cout << "\n\n";
+        }
         // I suppose we're assuming that something was read here...
         ServerDatagram data = {ntohl(serverDG->sequence_number), ntohs(serverDG->datagram_length)};
+
+        if (debug)
+        {
+            std::cout << "Recieved data: sequence number " << data.sequence_number << ", length "
+                      << data.datagram_length << "\n"
+                      << "Searching for recieved sequence number...\n";
+        }
+
+
         auto recvID = sentIDs.find(data.sequence_number); // sorry I can't be bothered to get the type right
         if ( recvID == sentIDs.end())
         {
@@ -247,6 +311,11 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         }
         else
         {
+            if (debug)
+            {
+                std::cout << "Found sequence number " << data.sequence_number << " and removing from set\n\n";
+            }
+
             sentIDs.erase(recvID);
         }
         free(serverDG);
