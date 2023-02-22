@@ -47,11 +47,24 @@ const int32_t NETWORKING_ERROR = 4;
  */
 int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
 {
+    if (debug)
+    {
+        std::cout << "Entering EstablishConnection...\n\n"
+                  << "Preparing to create hints\n";
+    }
+
     // Set up the hints
     addrinfo hints;
     memset(&hints, 0, sizeof(hints)); // Do I need to do this since this is C++?
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
+
+    if (debug)
+    {
+        std::cout << "Created hints.\n\n"
+                  << "Preparing to request address info on " << serverAddress << "\n";
+    }
+
 
     // Request the address info
     addrinfo* serverInfo;
@@ -63,6 +76,12 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
         throw ex;
     }
 
+    if (debug)
+    {
+        std::cout << "Successfully recieved address info.\n\n"
+                  << "Preparing to create and attempt to connect to socket\n";
+    }
+
     // Loop through the returned addresses and validate them by trying to connect to them
     int socketFD = -1;
     for (addrinfo* currentAddress = serverInfo; currentAddress != nullptr; currentAddress = currentAddress->ai_next)
@@ -70,19 +89,42 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
         // Attempt to create socket
         if ((socketFD = socket(currentAddress->ai_family, currentAddress->ai_socktype, currentAddress->ai_protocol)) == -1)
         {
-            perror("Error creating socket");
+            /* Explain why the socket creation failed (if debugging is enabled).
+             * This is not fatal since we have multiple addrinfo's to go through
+             */
+            if (debug)
+            {
+                perror("Error creating socket");
+            }
             continue;
         }
 
         // Attempt to connect to to the socket
         if (connect(socketFD, currentAddress->ai_addr, currentAddress->ai_addrlen) == -1)
         {
-            perror("Error connecting");
+            /* Explain why the connection attempt failed (if debuggign is enabled).
+             * This is not fatal since we have multiple addrinfo's to go through
+             */
+            if (debug)
+            {
+                perror("Error connecting");
+            }
+            close(socketFD);
             continue;
         }
 
         // Getting this far means that we must have connected, so no need to keep iterating
+        if (debug)
+        {
+            std::cout << "Successfully connected to " << serverAddress << "!\n";
+        }
+
         break;
+    }
+
+    if (debug)
+    {
+        std::cout << "Finished attempting to open and connect to socket.\n\n";
     }
 
     /* Since we either connected to an address or failed on all of them, we don't need the
@@ -97,8 +139,25 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
         throw ex;
     }
 
+    if (debug)
+    {
+        std::cout << "Attempting to set socket to nonblocking IO\n";
+    }
+
+
     // Since the socket is open, set it to be nonblocking
-    fcntl(socketFD, F_SETFL, O_NONBLOCK);
+    if (fcntl(socketFD, F_SETFL, O_NONBLOCK) == -1)
+    {
+        std::runtime_error ex(strerror(errno)); // This function is not thread safe, if I end up needing to thread later
+        throw ex;
+    }
+
+    if (debug)
+    {
+        std::cout << "Set socket to nonblocking IO.\n\n"
+                  << "Ready to return socket\n\n";
+    }
+
 
     // At long last, a prepared socket, ready to be returned:
     return socketFD;
@@ -173,7 +232,7 @@ int main(int argc, char* argv[])
                   << "Server IP/address: " << serverName << "\n"
                   << "Server port: " << serverPort << "\n"
                   << "Number of datagrams: " << datagramsToSend << "\n"
-                  << "Delay between datagrams: " << sendDelay << "\n";
+                  << "Delay between datagrams: " << sendDelay << "\n\n";
     }
 
     // How to best gatekeep this to keep it from running if above has issues?
