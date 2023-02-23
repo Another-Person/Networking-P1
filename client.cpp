@@ -1,5 +1,5 @@
 /* CSC 3600 Spring 2023 Project 1
- * UDP Blaster
+ * UDP Blaster -- Client
  * Joey Sachtleben
  */
 
