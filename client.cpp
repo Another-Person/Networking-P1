@@ -300,6 +300,11 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
                       << "Searching for recieved sequence number...\n";
         }
 
+        if (data.datagram_length != static_cast<uint16_t>(datagramSize))
+        {
+            std::cout << "Sequence number " << data.sequence_number << " reports that " << data.datagram_length
+                      << " bytes were sent, but we (expected to) send " << datagramSize << " bytes!\n";
+        }
 
         auto recvID = sentIDs.find(data.sequence_number); // sorry I can't be bothered to get the type right
         if ( recvID == sentIDs.end())
