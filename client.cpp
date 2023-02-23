@@ -339,6 +339,7 @@ int main(int argc, char* argv[])
     uint32_t datagramsToSend = NUMBER_OF_DATAGRAMS;
     US sendDelay(0);
     bool debug = false;
+    bool earlyStop = false;
 
     try
     {
@@ -382,17 +383,27 @@ int main(int argc, char* argv[])
     {
         std::cerr << e.what() << '\n';
         retval = STD_EXCEPTION_THROWN;
+        earlyStop = true;
     }
     catch (const int n)
     {
         retval = n;
+        earlyStop = true;
     }
     catch (...)
     {
         std::cerr << "Unknown exception caught\n";
         retval = UNKNOWN_EXCEPTION_THROWN;
+        earlyStop = true;
     }
 
+    // If something went wrong earlier, don't even bother moving to the networking section
+    if (earlyStop)
+    {
+        return retval;
+    }
+
+    // Does this need to be held behind debugging?
     if (debug)
     {
         std::cout << "Ready to run with following settings: \n"
@@ -402,8 +413,6 @@ int main(int argc, char* argv[])
                   << "Delay between datagrams: " << sendDelay.count() << "us\n\n";
     }
 
-    // How to best gatekeep this to keep it from running if above has issues?
-    // Do I even want that?
     try
     {
         udpSocket = EstablishConnection(serverName, serverPort, debug);
