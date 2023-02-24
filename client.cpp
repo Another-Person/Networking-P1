@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+#include <new>
 
 // C Standard Library and System libraries
 #include <stdio.h>
@@ -34,9 +35,8 @@ using US = std::chrono::microseconds;
 
 // Constants for errors
 const int32_t UNKNOWN_ARGUMENT = 1;
-const int32_t STD_EXCEPTION_THROWN = 2;     // Probably rename this one and the one below?
-const int32_t UNKNOWN_EXCEPTION_THROWN = 3;
-const int32_t NETWORKING_ERROR = 4;
+const int32_t SETUP_ERROR = 2;
+const int32_t NETWORKING_ERROR = 3;
 
 /* EstablishConnection
  * Responsible for opening a socket to the server.
@@ -174,14 +174,14 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
  * the final results. Will inform the users of any errors that occur, such as incorrect # of bytes sent or unknown
  * sequence numbers recieved.
  * Parameters:
- *   int socketFD              -- File descriptor for socket as prepared by EstablishConnection
- *   uint32_t datagramsToSend   -- Number of packets to send
- *   US delay                  -- Time in us to wait between sending packets
- *   bool debug                -- Enable debug messages
+ *   int      socketFD         -- File descriptor for socket as prepared by EstablishConnection
+ *   uint32_t datagramsToSend  -- Number of packets to send
+ *   US       delay            -- Time in us to wait between sending packets
+ *   bool     debug            -- Enable debug messages
  * Returns:
  *   Nothing.
  * Exceptions:
- *   Exceptions thrown from standard library objects may be thrown here.
+ *   Will thow an exception if there is an error during any memory allocation or if a standard function throws.
  */
 void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug)
 {
@@ -214,6 +214,12 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
 
         ssize_t datagramSize = sizeof(ClientDatagram) + prepDG.payload_length + 1; // add one to account for null byte
         ClientDatagram* realDG = static_cast<ClientDatagram*>(malloc(datagramSize));
+        if (realDG == 0)
+        {
+            std::bad_alloc ex;
+            throw ex;
+        }
+
         realDG->sequence_number = htonl(prepDG.sequence_number);
         realDG->payload_length = htons(prepDG.payload_length);
         /* The next statement is... complicated.
@@ -255,8 +261,15 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
 
         // Reciving data
         ServerDatagram* serverDG = static_cast<ServerDatagram*>(malloc(sizeof(ServerDatagram)));
+        if (serverDG == 0)
+        {
+            std::bad_alloc ex;
+            throw ex;
+        }
+
+        const size_t RECIEVE_ATTEMPTS = 8;
         ssize_t recvBytes = 0;
-        for (size_t i = 0; i < 8; i++)
+        for (size_t i = 0; i < RECIEVE_ATTEMPTS; i++)
         {
             recvBytes = recv(socketFD, static_cast<void *>(serverDG), sizeof(ServerDatagram), 0);
             if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
@@ -388,7 +401,7 @@ int main(int argc, char* argv[])
     catch (const std::exception& e)
     {
         std::cerr << e.what() << '\n';
-        retval = STD_EXCEPTION_THROWN;
+        retval = SETUP_ERROR;
         earlyStop = true;
     }
     catch (const int n)
@@ -399,7 +412,7 @@ int main(int argc, char* argv[])
     catch (...)
     {
         std::cerr << "Unknown exception caught\n";
-        retval = UNKNOWN_EXCEPTION_THROWN;
+        retval = SETUP_ERROR;
         earlyStop = true;
     }
 
@@ -432,7 +445,7 @@ int main(int argc, char* argv[])
     catch(...)
     {
         std::cerr << "Unknown exception caught\n";
-        retval = UNKNOWN_EXCEPTION_THROWN;
+        retval = NETWORKING_ERROR;
     }
 
 
