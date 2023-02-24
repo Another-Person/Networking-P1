@@ -357,13 +357,13 @@ int main(int argc, char* argv[])
                 debug = true;
                 break;
             case 'h':
-                std::cout << argv[0] << " (UDP Blaster) options:\n";
-                std::cout << "-d           Enables debug output\n";
-                std::cout << "-h           Displays this help and exit\n";
-                std::cout << "-s [address] Set server address (default 127.0.0.1)\n";
-                std::cout << "-p [port]    Set server port (default 39390)\n";
-                std::cout << "-n [n]       Set number of datagrams to send (default 2^18)\n";
-                std::cout << "-y [n]       Set delay in microseconds between datagrams (default 0)\n";
+                std::cout << argv[0] << " (UDP Blaster Client) options:\n"
+                          << "-d           Enables debug output\n"
+                          << "-h           Displays this help and exit\n"
+                          << "-s [address] Set server address (default 127.0.0.1)\n"
+                          << "-p [port]    Set server port (default 39390)\n"
+                          << "-n [n]       Set number of datagrams to send (default 2^18)\n"
+                          << "-y [n]       Set delay in microseconds between datagrams (default 0)\n";
                 throw 0; // Do I want to switch this to a proper exception and/or not throw here at all (ordering)?
 
             case 's':
