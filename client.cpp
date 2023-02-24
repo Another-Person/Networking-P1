@@ -42,7 +42,7 @@ const int32_t NETWORKING_ERROR = 4;
  * Responsible for opening a socket to the server.
  * Parameters:
  *   std::string serverAddress -- Address/IP of the server to connect to
- *   uint16_t     port          -- Port to connect to
+ *   uint16_t    port          -- Port to connect to
  *   bool        debug         -- Enable debug messages
  * Returns:
  *   An integer for the opened socket file descriptor.
@@ -60,7 +60,7 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
 
     // Set up the hints
     addrinfo hints;
-    memset(&hints, 0, sizeof(hints)); // Do I need to do this since this is C++?
+    memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
 
@@ -153,6 +153,7 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
     // Since the socket is open, set it to be nonblocking
     if (fcntl(socketFD, F_SETFL, O_NONBLOCK) == -1)
     {
+        close(socketFD);
         std::runtime_error ex(strerror(errno)); // This function is not thread safe, if I end up needing to thread later
         throw ex;
     }
@@ -364,7 +365,7 @@ int main(int argc, char* argv[])
                           << "-p [port]    Set server port (default 39390)\n"
                           << "-n [n]       Set number of datagrams to send (default 2^18)\n"
                           << "-y [n]       Set delay in microseconds between datagrams (default 0)\n";
-                throw 0; // Do I want to switch this to a proper exception and/or not throw here at all (ordering)?
+                throw 0;
 
             case 's':
                 serverName = optarg;
@@ -380,7 +381,7 @@ int main(int argc, char* argv[])
                 break;
             default:
                 std::cerr << "Unknown argument encountered.\n";
-                throw UNKNOWN_ARGUMENT; // Do I want to switch this to a proper exception?
+                throw UNKNOWN_ARGUMENT;
             }
         }
     }
