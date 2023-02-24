@@ -28,8 +28,9 @@
 #include "structure.hpp"
 
 // Constants for errors
-const int32_t SETUP_ERROR = 1;
-const int32_t NETWORKING_ERROR = 4; // to match with the client
+const int32_t UNKNOWN_ARGUMENT = 1;
+const int32_t SETUP_ERROR = 2;
+const int32_t NETWORKING_ERROR = 3; // to match with the client
 
 /* EstablishConnection
  * Responsible for opening the server the socket will be bound to.
@@ -151,7 +152,7 @@ int EstablishConnection(uint16_t port, bool debug)
  * Returns:
  *   Nothing. During normal operation, this function should be an infinite loop.
  * Exceptions:
- *   Will thow an exception if there is an error during any memory allocation or if a stl function throws.
+ *   Will thow an exception from any standard library functions.
  */
 void RecieveAndRespond(int socketFD, bool debug)
 {
@@ -246,7 +247,8 @@ int main(int argc, char* argv[])
                 break;
 
             default:
-                break;
+                std::cerr << "Unknown argument encountered.\n";
+                throw UNKNOWN_ARGUMENT;
             }
         }
     }
