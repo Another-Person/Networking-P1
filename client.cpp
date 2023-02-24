@@ -42,7 +42,7 @@ const int32_t NETWORKING_ERROR = 4;
  * Responsible for opening a socket to the server.
  * Parameters:
  *   std::string serverAddress -- Address/IP of the server to connect to
- *   int16_t     port          -- Port to connect to
+ *   uint16_t     port          -- Port to connect to
  *   bool        debug         -- Enable debug messages
  * Returns:
  *   An integer for the opened socket file descriptor.
