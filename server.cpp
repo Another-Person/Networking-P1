@@ -143,6 +143,79 @@ int EstablishConnection(uint16_t port, bool debug)
     return socketFD;
 }
 
+/* RecieveAndRespond
+ * Main loop which recieves a packet from a client and responds to it.
+ * Parameters:
+ *   int socketFD -- Socket to recieve and send on
+ *   bool debug   -- Enable debug messages
+ * Returns:
+ *   Nothing. During normal operation, this function should be an infinite loop.
+ * Exceptions:
+ *   Will thow an exception if there is an error during any memory allocation or if a stl function throws.
+ */
+void RecieveAndRespond(int socketFD, bool debug)
+{
+    if (debug)
+    {
+        std::cout << "Entering RecieveAndRespond loop...\n";
+    }
+
+    constexpr size_t BUFFER_SIZE = 1024;
+    int8_t buffer[BUFFER_SIZE];
+    sockaddr_storage clientAddr;
+    socklen_t l = sizeof(sockaddr_storage);
+    ServerDatagram response;
+
+    while (true)
+    {
+        memset(&buffer, 0, BUFFER_SIZE);
+        memset(&clientAddr, 0, sizeof(sockaddr_storage));
+        memset(&response, 0, sizeof(ServerDatagram));
+
+        int recvBytes = recvfrom(socketFD, buffer, BUFFER_SIZE, 0, reinterpret_cast<sockaddr*>(&clientAddr), &l);
+        if (recvBytes == -1)
+        {
+            perror("recvfrom error");
+            continue;
+        }
+        else if (recvBytes == 0)
+        {
+            std::cerr << "Server either recieved a zero-byte datagram or the remote connection is \"closed\"\n";
+            continue;
+        }
+
+        ClientDatagram* data = reinterpret_cast<ClientDatagram*>(&buffer);
+        data->sequence_number = ntohl(data->sequence_number);
+        data->payload_length = ntohs(data->payload_length);
+
+        if (debug)
+        {
+            std::cout << "Recieved packet with sequence number " << data->sequence_number << ", payload length "
+                      << data->payload_length << ", payload: " << (&buffer + sizeof(ClientDatagram))
+                      << "\n";
+        }
+
+        response.sequence_number = htonl(data->sequence_number);
+        response.datagram_length = htons(recvBytes);
+
+        if (debug)
+        {
+            std::cout << "Ready to reply with sequence number " << response.sequence_number << " and recieved length "
+                      << response.datagram_length << "\n";
+        }
+
+        sendto(socketFD, reinterpret_cast<void*>(&response), sizeof(response), 0, reinterpret_cast<sockaddr*>(&clientAddr), l);
+
+    }
+
+    if (debug)
+    {
+        std::cerr << "How'd you exit the recieve and reply loop?\n";
+    }
+
+
+}
+
 int main(int argc, char* argv[])
 {
     int retval = 0;
@@ -209,6 +282,7 @@ int main(int argc, char* argv[])
     try
     {
         socketFD = EstablishConnection(port, debug);
+        RecieveAndRespond(socketFD, debug);
     }
     catch(const std::exception& e)
     {
