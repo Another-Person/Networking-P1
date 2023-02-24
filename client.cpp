@@ -33,6 +33,9 @@
 // Convinience type aliases & using statements
 using US = std::chrono::microseconds;
 
+// Global constants
+const std::string PAYLOAD = "jsachtleben";
+
 // Constants for errors
 const int32_t UNKNOWN_ARGUMENT = 1;
 const int32_t SETUP_ERROR = 2;
@@ -185,7 +188,6 @@ int EstablishConnection(std::string serverAddress, uint16_t port, bool debug)
  */
 void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug)
 {
-    const std::string PAYLOAD = "jsachtleben";
     std::set<uint32_t> sentIDs;
 
     if (debug)
@@ -272,18 +274,21 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
         for (size_t i = 0; i < RECIEVE_ATTEMPTS; i++)
         {
             recvBytes = recv(socketFD, static_cast<void *>(serverDG), sizeof(ServerDatagram), 0);
-            if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
+            if (debug)
             {
-                std::cerr << "Error reading from socket\n";
-                perror("recv()");
-                continue;
+                if (recvBytes == -1 && (errno != EAGAIN || errno != EWOULDBLOCK))
+                {
+                    std::cerr << "Error reading from socket\n";
+                    perror("recv()");
+                    continue;
+                }
+                else if (recvBytes == 0)
+                {
+                    std::cerr << "Socket closed unexpectedly\n";
+                    continue;
+                }
             }
-            else if (recvBytes == 0)
-            {
-                std::cerr << "Socket closed unexpectedly\n";
-                continue;
-            }
-            else if (recvBytes == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            if (recvBytes == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
             {
                 continue;
             }
@@ -422,12 +427,14 @@ int main(int argc, char* argv[])
         return retval;
     }
 
-    // Does this need to be held behind debugging?
+    std::cout << "Datagram length: " << sizeof(ClientDatagram) << " size of string: " << PAYLOAD.length() + 1
+              << " total length: " << sizeof(ClientDatagram) + PAYLOAD.length() + 1 << "\n"
+              << "Client attempting to connect to address " << serverName << " on port " << serverPort << "\n";
+
+
     if (debug)
     {
-        std::cout << "Ready to run with following settings: \n"
-                  << "Server IP/address: " << serverName << "\n"
-                  << "Server port: " << serverPort << "\n"
+        std::cout << "Additional configuration information: \n"
                   << "Number of datagrams: " << datagramsToSend << "\n"
                   << "Delay between datagrams: " << sendDelay.count() << "us\n\n";
     }
