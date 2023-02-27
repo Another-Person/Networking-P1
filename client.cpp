@@ -230,7 +230,8 @@ void SendAndRecieve(int socketFD, uint32_t datagramsToSend, US delay, bool debug
          * We then copy the C string representation of the payload into this space. The size of the payload is used to
          * make certain we only write the intended number of bytes.
          */
-        strncpy((reinterpret_cast<char*>(realDG) + sizeof(ClientDatagram)),
+        //strncpy((reinterpret_cast<char*>(realDG) + sizeof(ClientDatagram)),
+        strncpy((reinterpret_cast<char*>(realDG + 1)),
                 PAYLOAD.c_str(), PAYLOAD.size() + 1);
         // The realDG is now ready to be sent!
 
